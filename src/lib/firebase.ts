@@ -4,12 +4,12 @@ import { getFirestore } from 'firebase/firestore';
 import firebaseConfigJson from '../../firebase-applet-config.json';
 
 const firebaseConfig = {
-  apiKey: firebaseConfigJson.apiKey,
-  authDomain: firebaseConfigJson.authDomain,
-  projectId: firebaseConfigJson.projectId,
-  storageBucket: firebaseConfigJson.storageBucket,
-  messagingSenderId: firebaseConfigJson.messagingSenderId,
-  appId: firebaseConfigJson.appId,
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseConfigJson.apiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfigJson.authDomain,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseConfigJson.projectId,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfigJson.storageBucket,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfigJson.messagingSenderId,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || firebaseConfigJson.appId,
 };
 
 // Initialize Firebase App singleton
@@ -21,9 +21,13 @@ setPersistence(auth, browserLocalPersistence).catch((err) => {
   console.warn('Could not set persistence:', err);
 });
 
+const firestoreDbId =
+  import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID ||
+  firebaseConfigJson.firestoreDatabaseId;
+
 // Initialize Firestore with specific databaseId if provided
-export const db = firebaseConfigJson.firestoreDatabaseId
-  ? getFirestore(app, firebaseConfigJson.firestoreDatabaseId)
+export const db = firestoreDbId
+  ? getFirestore(app, firestoreDbId)
   : getFirestore(app);
 
 // Helper for internal deterministic email generation for predefined members
