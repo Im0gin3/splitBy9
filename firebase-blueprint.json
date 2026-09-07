@@ -1,0 +1,166 @@
+{
+  "entities": {
+    "ClaimedProfile": {
+      "title": "ClaimedProfile",
+      "description": "Public status tracking which of the 9 predefined member profiles have been claimed with a password.",
+      "type": "object",
+      "properties": {
+        "predefinedId": {
+          "type": "string",
+          "description": "Identifier of the predefined person, person-1 through person-9."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name of the person."
+        },
+        "claimed": {
+          "type": "boolean",
+          "description": "Whether the profile has been claimed."
+        },
+        "claimedByUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user who claimed this profile."
+        },
+        "claimedAt": {
+          "type": "string",
+          "description": "Server timestamp when the profile was claimed."
+        }
+      },
+      "required": ["predefinedId", "displayName", "claimed"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Internal user record mapping Auth UID to the member profile.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID."
+        },
+        "predefinedId": {
+          "type": "string",
+          "description": "Assigned predefined person ID."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name of the member."
+        },
+        "internalEmail": {
+          "type": "string",
+          "description": "Internal generated email used for authentication."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp."
+        }
+      },
+      "required": ["uid", "predefinedId", "displayName"]
+    },
+    "MealSlot": {
+      "title": "MealSlot",
+      "description": "A weekly lunch or dinner meal slot (14 slots per week).",
+      "type": "object",
+      "properties": {
+        "weekId": {
+          "type": "string",
+          "description": "ISO week identifier e.g. 2026-W37."
+        },
+        "day": {
+          "type": "string",
+          "description": "Day of the week e.g. Monday, Tuesday."
+        },
+        "dateStr": {
+          "type": "string",
+          "description": "Formatted date string e.g. Sep 7."
+        },
+        "mealType": {
+          "type": "string",
+          "description": "Meal type: lunch or dinner."
+        },
+        "status": {
+          "type": "string",
+          "description": "Status: open, reserved, or confirmed."
+        },
+        "isLocked": {
+          "type": "boolean",
+          "description": "True when confirmed and locked for the group."
+        },
+        "title": {
+          "type": "string",
+          "description": "Meal recipe or restaurant title."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Optional preparation or restaurant notes."
+        },
+        "decidedByPersonId": {
+          "type": "string",
+          "description": "Person ID who made the decision."
+        },
+        "decidedByPersonName": {
+          "type": "string",
+          "description": "Name of person who made the decision."
+        },
+        "decidedByUid": {
+          "type": "string",
+          "description": "Auth UID of the decision maker."
+        },
+        "lockedAt": {
+          "type": "string",
+          "description": "ISO timestamp when locked."
+        }
+      },
+      "required": ["weekId", "day", "mealType", "status", "isLocked"]
+    },
+    "UserWeeklyDecision": {
+      "title": "UserWeeklyDecision",
+      "description": "Tracks atomic count and list of confirmed slot IDs for a person in a week.",
+      "type": "object",
+      "properties": {
+        "weekId": {
+          "type": "string",
+          "description": "ISO week identifier e.g. 2026-W37."
+        },
+        "personId": {
+          "type": "string",
+          "description": "Person ID who made the decisions."
+        },
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID."
+        },
+        "maxDecisions": {
+          "type": "number",
+          "description": "Max decisions allowed for this week (1 or 2)."
+        },
+        "confirmedSlotIds": {
+          "type": "array",
+          "description": "Array of confirmed slot IDs."
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Server timestamp of update."
+        }
+      },
+      "required": ["weekId", "personId", "uid", "maxDecisions", "confirmedSlotIds"]
+    }
+  },
+  "firestore": {
+    "/claimed_profiles/{predefinedId}": {
+      "schema": "ClaimedProfile",
+      "description": "Tracks whether each of the 9 predefined member profiles has been claimed."
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Private member profile mapped to Firebase Auth UID."
+    },
+    "/meal_slots/{slotId}": {
+      "schema": "MealSlot",
+      "description": "Stores lunch and dinner meal slots for each week."
+    },
+    "/user_weekly_decisions/{decisionId}": {
+      "schema": "UserWeeklyDecision",
+      "description": "Tracks atomic confirmed slot IDs per user per week to prevent concurrent over-allocation."
+    }
+  }
+}

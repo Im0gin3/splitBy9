@@ -1,0 +1,209 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isPredefinedPersonId(id) {
+      return id in [
+        'person-1', 'person-2', 'person-3',
+        'person-4', 'person-5', 'person-6',
+        'person-7', 'person-8', 'person-9'
+      ];
+    }
+
+    function isValidDay(day) {
+      return day in [
+        'monday', 'tuesday', 'wednesday',
+        'thursday', 'friday', 'saturday', 'sunday'
+      ];
+    }
+
+    function isValidMealType(mealType) {
+      return mealType in ['breakfast_lunch', 'dinner'];
+    }
+
+    // Deterministic fair-rotation calculation implemented natively inside Firestore rules:
+    // Computes the exact entitlement (1 or 2 meals) for any person in any week based on the 9-member rotation.
+    function calculateMaxDecisions(weekId, personId) {
+      let year = int(weekId[0:4]);
+      let weekNum = int(weekId[6:8]);
+      let weekIdx = (year - 2026) * 52 + weekNum - 37;
+      let startIdx = ((weekIdx * 5) % 9 + 9) % 9;
+      let personIdx = int(personId[7:8]) - 1;
+      let offset = ((personIdx - startIdx) % 9 + 9) % 9;
+      return offset < 5 ? 2 : 1;
+    }
+
+    // Resolves authenticated user's bound predefined profile ID from their immutable user record
+    function getUserPersonId() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.predefinedId;
+    }
+
+    // Reference to user's decision tracking document
+    function getUserDecisionDoc(weekId, personId) {
+      return /databases/$(database)/documents/user_weekly_decisions/$(weekId + '_' + personId);
+    }
+
+    // 1. Claimed profiles: Public status tracking which profiles are registered
+    match /claimed_profiles/{predefinedId} {
+      allow read: if true;
+
+      // A profile can only be claimed once.
+      // Must not already exist, must be valid person ID, and claimedByUid must match authenticated user.
+      allow create: if isAuthenticated()
+        && isPredefinedPersonId(predefinedId)
+        && !exists(/databases/$(database)/documents/claimed_profiles/$(predefinedId))
+        && request.resource.data.predefinedId == predefinedId
+        && request.resource.data.claimed == true
+        && request.resource.data.claimedByUid == request.auth.uid;
+
+      // Claimed status can never be modified or deleted by users.
+      allow update, delete: if false;
+    }
+
+    // 2. User profiles: Maps Auth UID to person ID
+    match /users/{userId} {
+      // User can only read their own profile
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+
+      // Can only be created once during account claiming, permanently bound to the claimed profile
+      allow create: if isAuthenticated()
+        && request.auth.uid == userId
+        && request.resource.data.uid == userId
+        && isPredefinedPersonId(request.resource.data.predefinedId)
+        && exists(/databases/$(database)/documents/claimed_profiles/$(request.resource.data.predefinedId))
+        && get(/databases/$(database)/documents/claimed_profiles/$(request.resource.data.predefinedId)).data.claimedByUid == request.auth.uid;
+
+      // Mapping cannot be reassigned, hijacked, or deleted
+      allow update, delete: if false;
+    }
+
+    // 3. User weekly decisions: Atomic tracking of confirmed slot IDs per person per week
+    match /user_weekly_decisions/{decisionId} {
+      allow read: if isAuthenticated();
+
+      // Only the authenticated user can create their own decision record for their assigned personId.
+      // maxDecisions CANNOT be spoofed: it is strictly verified against calculateMaxDecisions.
+      allow create: if isAuthenticated()
+        && decisionId == request.resource.data.weekId + '_' + getUserPersonId()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.personId == getUserPersonId()
+        && request.resource.data.maxDecisions == calculateMaxDecisions(request.resource.data.weekId, getUserPersonId())
+        && request.resource.data.confirmedSlotIds is list
+        && request.resource.data.confirmedSlotIds.size() <= request.resource.data.maxDecisions;
+
+      // On update:
+      // - personId cannot be changed
+      // - maxDecisions cannot be increased or altered
+      // - confirmedSlotIds is strictly append-only (cannot remove previously confirmed slots)
+      // - total confirmed slots cannot exceed maxDecisions
+      allow update: if isAuthenticated()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.personId == resource.data.personId
+        && request.resource.data.personId == getUserPersonId()
+        && request.resource.data.maxDecisions == resource.data.maxDecisions
+        && request.resource.data.confirmedSlotIds is list
+        && request.resource.data.confirmedSlotIds.size() <= resource.data.maxDecisions
+        && request.resource.data.confirmedSlotIds.hasAll(resource.data.confirmedSlotIds);
+
+      // Records cannot be deleted to reset quota
+      allow delete: if false;
+    }
+
+    // 4. Weekly allocations: Rotation records cannot be created or altered by clients
+    match /weekly_allocations/{weekId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    // 5. Meal slots (14 slots per week)
+    match /meal_slots/{slotId} {
+      allow read: if isAuthenticated();
+
+      // Deleting a meal slot is ONLY allowed for releasing temporary unconfirmed reservations.
+      // A confirmed meal can NEVER be deleted by a normal user.
+      allow delete: if isAuthenticated()
+        && resource.data.isLocked != true
+        && resource.data.status == 'reserved'
+        && resource.data.tempLock.lockedByUid == request.auth.uid;
+
+      // Creating a new meal slot
+      allow create: if isAuthenticated()
+        && isValidDay(request.resource.data.day)
+        && isValidMealType(request.resource.data.mealType)
+        && request.resource.data.weekId is string
+        && request.resource.data.weekId.size() <= 20
+        && slotId == request.resource.data.weekId + '_' + request.resource.data.day + '_' + request.resource.data.mealType
+        && (
+          // Case A: Initial sample seed data (restricted strictly to week 2026-W37)
+          (
+            request.resource.data.weekId == '2026-W37'
+            && request.resource.data.status == 'confirmed'
+            && request.resource.data.isLocked == true
+            && request.resource.data.get('isSeededData', false) == true
+            && request.resource.data.decidedByPersonId in ['person-1', 'person-2', 'person-3', 'person-4', 'person-5']
+          )
+          ||
+          // Case B: Acquiring a temporary editing reservation
+          (
+            request.resource.data.status == 'reserved'
+            && request.resource.data.isLocked == false
+            && request.resource.data.tempLock.lockedByUid == request.auth.uid
+            && request.resource.data.decidedByUid == request.auth.uid
+            && request.resource.data.decidedByPersonId == getUserPersonId()
+          )
+          ||
+          // Case C: Confirming directly
+          (
+            request.resource.data.status == 'confirmed'
+            && request.resource.data.isLocked == true
+            && request.resource.data.decidedByUid == request.auth.uid
+            && request.resource.data.decidedByPersonId == getUserPersonId()
+            && request.resource.data.title is string
+            && request.resource.data.title.size() > 0
+            && request.resource.data.title.size() <= 200
+            && exists(getUserDecisionDoc(request.resource.data.weekId, getUserPersonId()))
+            && get(getUserDecisionDoc(request.resource.data.weekId, getUserPersonId())).data.confirmedSlotIds.size() < get(getUserDecisionDoc(request.resource.data.weekId, getUserPersonId())).data.maxDecisions
+          )
+        );
+
+      // Updating an existing meal slot
+      allow update: if isAuthenticated()
+        // CRITICAL INVARIANT: A confirmed meal can NEVER be replaced, edited, or re-claimed.
+        && resource.data.isLocked != true
+        && resource.data.status != 'confirmed'
+        // An active unexpired temporary lock by another user CANNOT be overwritten or bypassed.
+        && (
+          resource.data.tempLock == null
+          || resource.data.tempLock.lockedByUid == request.auth.uid
+          || resource.data.tempLock.expiresAt < request.time.toMillis()
+        )
+        && (
+          // Update to reserved status
+          (
+            request.resource.data.status == 'reserved'
+            && request.resource.data.isLocked == false
+            && request.resource.data.tempLock.lockedByUid == request.auth.uid
+            && request.resource.data.decidedByUid == request.auth.uid
+            && request.resource.data.decidedByPersonId == getUserPersonId()
+          )
+          ||
+          // Update to confirmed status
+          (
+            request.resource.data.status == 'confirmed'
+            && request.resource.data.isLocked == true
+            && request.resource.data.decidedByUid == request.auth.uid
+            && request.resource.data.decidedByPersonId == getUserPersonId()
+            && request.resource.data.title is string
+            && request.resource.data.title.size() > 0
+            && request.resource.data.title.size() <= 200
+            && exists(getUserDecisionDoc(request.resource.data.weekId, getUserPersonId()))
+            && get(getUserDecisionDoc(request.resource.data.weekId, getUserPersonId())).data.confirmedSlotIds.size() < get(getUserDecisionDoc(request.resource.data.weekId, getUserPersonId())).data.maxDecisions
+          )
+        );
+    }
+  }
+}

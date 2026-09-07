@@ -1,0 +1,6 @@
+{
+  "name": "Meal Planner",
+  "description": "A weekly meal planning app for a private group of 9 people with meal locking and decision allocations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
