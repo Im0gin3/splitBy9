@@ -104,16 +104,16 @@ export function generateInitialMeals(): MealEntry[] {
 }
 
 export const POPULAR_MEAL_SUGGESTIONS = [
-  'Creamy Tuscan Garlic Chicken Pasta',
-  'Mediterranean Falafel & Hummus Mezze',
-  'Slow-Cooked Beef Birria Tacos',
-  'Japanese Chicken Katsu Curry',
-  'Pan-Seared Ribeye Steak & Chimichurri',
-  'Vietnamese Chicken Banh Mi',
-  'Wild Mushroom & Truffle Risotto',
-  'Fresh Greek Salad with Grilled Haloumi',
-  'Smoked Salmon Bagel with Cream Cheese & Capers',
-  'Homemade Beef Smash Burgers with Truffle Fries',
-  'Thai Coconut Green Curry with Tofu',
-  'Butter Chicken with Garlic Naan & Raita',
+  'Paneer Butter Masala',
+  'Kadai Paneer',
+  'Palak Paneer',
+  'Shahi Paneer',
+  'Chole',
+  'Rajma Masala',
+  'Dal Makhani',
+  'Dal Tadka',
+  'Aloo Gobi',
+  'Malai Kofta',
+  'Matar Paneer',
+  'Veg Kofta Curry',
 ];
