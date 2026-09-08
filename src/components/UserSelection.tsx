@@ -171,7 +171,7 @@ export const UserSelection: React.FC<UserSelectionProps> = ({
       {/* Footer info */}
       <footer className="max-w-4xl mx-auto w-full text-center relative z-10 pt-8 pb-2 text-xs text-zinc-400">
         <p>
-          Meal Planner for Private Group • 9 Members • Firebase Authentication & Firestore
+          bhai breakfast pack kar liyo
         </p>
       </footer>
 
