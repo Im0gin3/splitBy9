@@ -30,9 +30,7 @@ export const UserSelection: React.FC<UserSelectionProps> = ({
 
   // Sync if parent updates meals
   useEffect(() => {
-    if (meals && meals.length > 0) {
-      setLiveMeals(meals);
-    }
+    setLiveMeals(meals || []);
   }, [meals]);
 
   // Real-time listener for meal slots to ensure accurate decision counts
@@ -40,12 +38,7 @@ export const UserSelection: React.FC<UserSelectionProps> = ({
     const unsubscribe = subscribeToWeekMeals(
       currentWeekId,
       (loadedMeals) => {
-        setLiveMeals((prev) => {
-          const map = new Map<string, MealEntry>();
-          prev.forEach((m) => map.set(m.id, m));
-          loadedMeals.forEach((m) => map.set(m.id, m));
-          return Array.from(map.values());
-        });
+        setLiveMeals(loadedMeals);
       },
       (err) => {
         console.warn('Could not subscribe to meals in UserSelection:', err);
@@ -55,7 +48,7 @@ export const UserSelection: React.FC<UserSelectionProps> = ({
   }, [currentWeekId]);
 
   // Calculate upcoming confirmed meal based on India Standard Time (IST)
-  const effectiveMeals = liveMeals.length > 0 ? liveMeals : meals;
+  const effectiveMeals = liveMeals;
   const upcomingMeal = useMemo(() => {
     return getUpcomingMeal(effectiveMeals);
   }, [effectiveMeals]);

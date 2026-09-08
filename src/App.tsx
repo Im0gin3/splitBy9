@@ -22,7 +22,6 @@ import {
   releaseTempLock,
   confirmMealSlot,
   removeConfirmedMealByAtiksh,
-  seedInitialWeekMealsIfEmpty,
   ensureUserWeeklyDecision,
 } from './services/mealPlannerService';
 import { UserSelection } from './components/UserSelection';
@@ -48,6 +47,7 @@ export default function App() {
 
   // Real-time Firestore meals for currently active week
   const [meals, setMeals] = useState<MealEntry[]>([]);
+  const [isInitialMealsLoading, setIsInitialMealsLoading] = useState<boolean>(true);
 
   // Modal interaction states
   const [confirmModalSlot, setConfirmModalSlot] = useState<{
@@ -142,28 +142,24 @@ export default function App() {
     return Array.from(ids);
   }, [currentWeekId]);
 
-  // 3. Subscribe to real-time meal slots for all active weeks & seed if empty (authenticated only)
+  // 3. Subscribe to real-time meal slots for all active weeks
   useEffect(() => {
-    // Seed sample meals if this is the first time the week is accessed (only if authenticated)
-    if (authUser) {
+    // Guarantee the user's weekly decision document exists in Firestore (only if authenticated)
+    if (authUser && currentUser) {
       activeWeekIds.forEach((wId) => {
-        seedInitialWeekMealsIfEmpty(wId);
-
-        // Guarantee the user's weekly decision document exists in Firestore
-        if (currentUser) {
-          ensureUserWeeklyDecision(wId, {
-            uid: authUser.uid,
-            personId: currentUser.id,
-            name: currentUser.name,
-          }).catch((err) => {
-            console.warn(`Could not ensure weekly decision document for ${wId}:`, err);
-          });
-        }
+        ensureUserWeeklyDecision(wId, {
+          uid: authUser.uid,
+          personId: currentUser.id,
+          name: currentUser.name,
+        }).catch((err) => {
+          console.warn(`Could not ensure weekly decision document for ${wId}:`, err);
+        });
       });
     }
 
     const unsubs: (() => void)[] = [];
     const mealsByWeek: Record<string, MealEntry[]> = {};
+    const loadedWeeks = new Set<string>();
 
     const recomputeMeals = () => {
       const combined: MealEntry[] = [];
@@ -184,10 +180,18 @@ export default function App() {
         wId,
         (loadedMeals) => {
           mealsByWeek[wId] = loadedMeals;
+          loadedWeeks.add(wId);
           recomputeMeals();
+          if (activeWeekIds.every((id) => loadedWeeks.has(id))) {
+            setIsInitialMealsLoading(false);
+          }
         },
         (err) => {
           console.warn(`Could not sync meals for week ${wId}:`, err);
+          loadedWeeks.add(wId);
+          if (activeWeekIds.every((id) => loadedWeeks.has(id))) {
+            setIsInitialMealsLoading(false);
+          }
         }
       );
       unsubs.push(unsub);
@@ -342,8 +346,8 @@ export default function App() {
     }
   };
 
-  // Loading auth state
-  if (isAuthLoading) {
+  // Loading auth or initial Firestore meal data state
+  if (isAuthLoading || isInitialMealsLoading) {
     return (
       <div className="min-h-screen bg-[#07070a] text-zinc-100 flex flex-col items-center justify-center p-4">
         <Loader2 className="w-8 h-8 text-[#0000FD] animate-spin mb-3" />

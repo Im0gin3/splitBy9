@@ -24,7 +24,7 @@ import {
 } from 'firebase/auth';
 import { auth, db, getInternalEmail } from '../lib/firebase';
 import { MealEntry, Person, ClaimedProfile, DayOfWeek, MealType, TempLockInfo } from '../types';
-import { PREDEFINED_PEOPLE, generateInitialMeals } from '../data/mockData';
+import { PREDEFINED_PEOPLE } from '../data/mockData';
 import { getMaxDecisionsForPersonAndWeek } from '../utils/allocationUtils';
 
 // Collection references
@@ -640,52 +640,9 @@ export async function removeConfirmedMealByAtiksh(
 }
 
 /**
- * Checks if the specified week has any meals in Firestore.
- * If completely empty (e.g. on first launch), seeds the 5 initial sample meals
- * so the initial experience is ready and backed by Firestore.
+ * Mock data seeding is disabled to prevent mock data flashing on page load.
+ * Firestore empty states are rendered natively without injecting sample meals.
  */
-export async function seedInitialWeekMealsIfEmpty(weekId: string): Promise<void> {
-  if (!auth.currentUser) {
-    return;
-  }
-  try {
-    const q = query(
-      collection(db, MEAL_SLOTS_COLLECTION),
-      where('weekId', '==', weekId)
-    );
-    const snap = await getDocs(q);
-    if (!snap.empty) {
-      // Already has data in Firestore
-      return;
-    }
-
-    // Seed the 5 initial meals matching rotation rules
-    const initialMeals = generateInitialMeals();
-    const batch = writeBatch(db);
-
-    initialMeals.forEach((meal) => {
-      const docId = getSlotDocId(meal.weekId, meal.day, meal.mealType);
-      const slotRef = doc(db, MEAL_SLOTS_COLLECTION, docId);
-      batch.set(slotRef, {
-        weekId: meal.weekId,
-        day: meal.day,
-        dateStr: meal.dateStr,
-        mealType: meal.mealType,
-        status: 'confirmed',
-        isLocked: true,
-        title: meal.title,
-        notes: meal.notes || '',
-        tags: meal.tags || [],
-        decidedByPersonId: meal.decidedByPersonId,
-        decidedByPersonName: meal.decidedByPersonName,
-        lockedAt: meal.lockedAt,
-        tempLock: null,
-        isSeededData: true,
-      });
-    });
-
-    await batch.commit();
-  } catch (err) {
-    console.warn('Could not seed initial meals:', err);
-  }
+export async function seedInitialWeekMealsIfEmpty(_weekId: string): Promise<void> {
+  return;
 }
