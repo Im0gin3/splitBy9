@@ -94,15 +94,6 @@ export const UserSelection: React.FC<UserSelectionProps> = ({
             <Calendar className="w-3.5 h-3.5 text-blue-400" />
             <span>Current Week: <strong className="text-white">{weekRangeText}</strong></span>
           </div>
-          <span className="text-zinc-600 hidden sm:inline">•</span>
-          <span className="text-zinc-300">
-            <strong>14 meal slots</strong> (Mon–Sun)
-          </span>
-          <span className="text-zinc-600 hidden sm:inline">•</span>
-          <span className="text-blue-300 flex items-center gap-1">
-            <Sparkles className="w-3 h-3 text-blue-400" />
-            5 additional decisions in fair rotation
-          </span>
         </div>
       </header>
 

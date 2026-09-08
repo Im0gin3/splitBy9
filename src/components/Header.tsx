@@ -43,9 +43,6 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="font-bold text-base sm:text-lg tracking-tight text-white">
                   the crib
                 </span>
-                <span className="hidden sm:inline-flex text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400">
-                  Group of 9
-                </span>
               </div>
               <p className="text-xs text-zinc-400 hidden sm:block">
                 Weekly group dinner & lunch schedule
@@ -115,34 +112,6 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right: Decision status pill & Profile & Logout (Desktop) */}
         <div className="hidden md:flex items-center gap-3">
-          {/* Remaining decisions pill */}
-          <div
-            id="user-decisions-status-badge"
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-              isLimitReached
-                ? 'bg-amber-950/30 text-amber-300 border-amber-800/50'
-                : 'bg-[#0000FD]/10 text-blue-300 border-[#0000FD]/40'
-            }`}
-          >
-            {isLimitReached ? (
-              <>
-                <Lock className="w-3.5 h-3.5 text-amber-400" />
-                <span>0 of {maxDecisions} {maxDecisions === 1 ? 'decision' : 'decisions'} left</span>
-              </>
-            ) : (
-              <>
-                <span className="w-2 h-2 rounded-full bg-[#0000FD] animate-pulse" />
-                <span>
-                  {remainingDecisions} of {maxDecisions} {maxDecisions === 1 ? 'decision' : 'decisions'} remaining
-                </span>
-                {isBonusWeek && (
-                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-[#0000FD]/30 text-blue-200">
-                    Bonus
-                  </span>
-                )}
-              </>
-            )}
-          </div>
 
           {/* Active user badge & Log out */}
           <div className="flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-200">
