@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { DayInfo, MealEntry, MealType, Person } from '../types';
+import { DayInfo, MealEntry, MealType, Person, MealHeart } from '../types';
 import { TOTAL_MEAL_SLOTS_PER_WEEK, PREDEFINED_PEOPLE } from '../data/mockData';
 import { getTwoWeeksDays, getMondayOfWeek } from '../utils/dateUtils';
-import { Plus, Clock, Sparkles, Coffee, UtensilsCrossed, AlertCircle } from 'lucide-react';
+import { Plus, Clock, Sparkles, Coffee, UtensilsCrossed, AlertCircle, Heart } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface WeeklyGridProps {
@@ -10,6 +10,8 @@ interface WeeklyGridProps {
   meals: MealEntry[];
   currentUser: Person;
   remainingDecisions: number;
+  mealHearts?: MealHeart[];
+  onToggleHeart?: (meal: MealEntry) => void;
   onSelectEmptySlot: (day: DayInfo, mealType: MealType) => void;
   onSelectLockedMeal: (meal: MealEntry) => void;
 }
@@ -41,9 +43,19 @@ export const WeeklyGrid: React.FC<WeeklyGridProps> = ({
   meals,
   currentUser,
   remainingDecisions,
+  mealHearts = [],
+  onToggleHeart,
   onSelectEmptySlot,
   onSelectLockedMeal,
 }) => {
+  // Helper to calculate heart statistics for a specific meal slot
+  const getSlotHearts = (meal: MealEntry | undefined) => {
+    if (!meal) return { count: 0, hasHearted: false };
+    const matching = (mealHearts || []).filter((h) => h.mealId === meal.id);
+    const hasHearted = matching.some((h) => h.predefinedId === currentUser.id);
+    return { count: matching.length, hasHearted };
+  };
+
   // 14 days starting from current week's Monday through Sunday of next week
   const mobileDays = useMemo(() => {
     return getTwoWeeksDays(getMondayOfWeek(0));
@@ -273,6 +285,7 @@ export const WeeklyGrid: React.FC<WeeklyGridProps> = ({
                 const isReserved = meal?.status === 'reserved' && meal?.tempLock && meal.tempLock.expiresAt > Date.now();
                 const isReservedByOther = isReserved && meal?.tempLock?.lockedByPersonId !== currentUser.id;
                 const isReservedByMe = isReserved && meal?.tempLock?.lockedByPersonId === currentUser.id;
+                const heartsInfo = getSlotHearts(meal);
 
                 return (
                   <div
@@ -293,7 +306,7 @@ export const WeeklyGrid: React.FC<WeeklyGridProps> = ({
                             : 'bg-zinc-900/80 border-zinc-800 hover:border-zinc-700 shadow-black/40'
                         }`}
                       >
-                        {/* Decided by member tag (No visible LOCKED badge) */}
+                        {/* Decided by member tag and heart badge/button */}
                         <div className="flex items-center justify-between gap-1 mb-1.5">
                           <span
                             className={`inline-flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full border ${
@@ -311,10 +324,69 @@ export const WeeklyGrid: React.FC<WeeklyGridProps> = ({
                                   (isDecidedByCurrent ? currentUser.avatarColor : '#3b82f6'),
                               }}
                             />
-                            <span className="truncate max-w-[90px]">
+                            <span className="truncate max-w-[85px]">
                               {isDecidedByCurrent ? 'You' : meal.decidedByPersonName}
                             </span>
                           </span>
+
+                          {/* Heart indicator for owner / Toggle button for non-owner */}
+                          {isDecidedByCurrent ? (
+                            /* Owner View: No heart button, only heart count indicator */
+                            <div
+                              title={
+                                heartsInfo.count === 1
+                                  ? '1 member liked your meal'
+                                  : `${heartsInfo.count} members liked your meal`
+                              }
+                              className="inline-flex items-center gap-1 text-[11px] select-none py-0.5 px-1.5 rounded-full bg-zinc-850/90 border border-zinc-750/70"
+                            >
+                              <Heart
+                                className={`w-3 h-3 ${
+                                  heartsInfo.count > 0 ? 'fill-rose-500 text-rose-500' : 'text-zinc-500'
+                                }`}
+                              />
+                              <span
+                                className={
+                                  heartsInfo.count > 0
+                                    ? 'text-rose-300 font-semibold text-[10px]'
+                                    : 'text-zinc-500 text-[10px]'
+                                }
+                              >
+                                {heartsInfo.count}
+                              </span>
+                            </div>
+                          ) : (
+                            /* Non-Owner View: Subtle heart toggle button with count */
+                            <button
+                              type="button"
+                              id={`heart-btn-${meal.id}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onToggleHeart) onToggleHeart(meal);
+                              }}
+                              title={heartsInfo.hasHearted ? 'Unlike meal' : 'Heart this meal'}
+                              className={`inline-flex items-center gap-1 text-[11px] font-medium py-0.5 px-1.5 rounded-full transition-all cursor-pointer border ${
+                                heartsInfo.hasHearted
+                                  ? 'bg-rose-500/15 border-rose-500/40 text-rose-300 hover:bg-rose-500/25'
+                                  : 'bg-zinc-800/80 border-zinc-700/60 text-zinc-400 hover:text-rose-300 hover:border-rose-500/30 hover:bg-zinc-800'
+                              }`}
+                            >
+                              <Heart
+                                className={`w-3 h-3 transition-transform ${
+                                  heartsInfo.hasHearted ? 'fill-rose-500 text-rose-500 scale-105' : 'text-zinc-400'
+                                }`}
+                              />
+                              {heartsInfo.count > 0 && (
+                                <span
+                                  className={`text-[10px] font-semibold ${
+                                    heartsInfo.hasHearted ? 'text-rose-300' : 'text-zinc-400'
+                                  }`}
+                                >
+                                  {heartsInfo.count}
+                                </span>
+                              )}
+                            </button>
+                          )}
                         </div>
 
                         {/* Meal Title */}
@@ -454,9 +526,11 @@ export const WeeklyGrid: React.FC<WeeklyGridProps> = ({
               {MEAL_TYPES.map((mealTypeObj) => {
                 const meal = getMealForSlot(day, mealTypeObj.type);
                   const isLocked = !!meal?.isLocked;
+                  const isDecidedByCurrent = meal?.decidedByPersonId === currentUser.id;
                   const isReserved = meal?.status === 'reserved' && meal?.tempLock && meal.tempLock.expiresAt > Date.now();
                   const isReservedByOther = isReserved && meal?.tempLock?.lockedByPersonId !== currentUser.id;
                   const isReservedByMe = isReserved && meal?.tempLock?.lockedByPersonId === currentUser.id;
+                  const heartsInfo = getSlotHearts(meal);
 
                   return (
                     <div
@@ -484,17 +558,74 @@ export const WeeklyGrid: React.FC<WeeklyGridProps> = ({
                           onClick={() => onSelectLockedMeal(meal)}
                           className="cursor-pointer"
                         >
-                          <h4 className="font-bold text-sm text-white hover:text-blue-300 transition-colors">
-                            {meal.title}
-                          </h4>
-                          {meal.notes && (
-                            <p className="text-xs text-zinc-400 mt-0.5">
-                              {meal.notes}
-                            </p>
-                          )}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1">
+                              <h4 className="font-bold text-sm text-white hover:text-blue-300 transition-colors">
+                                {meal.title}
+                              </h4>
+                              {meal.notes && (
+                                <p className="text-xs text-zinc-400 mt-0.5">
+                                  {meal.notes}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Heart indicator / button for mobile */}
+                            <div className="flex-shrink-0 pt-0.5">
+                              {isDecidedByCurrent ? (
+                                <div
+                                  title={`${heartsInfo.count} hearts received`}
+                                  className="inline-flex items-center gap-1 text-xs py-1 px-2 rounded-full bg-zinc-900 border border-zinc-800 select-none"
+                                >
+                                  <Heart
+                                    className={`w-3.5 h-3.5 ${
+                                      heartsInfo.count > 0 ? 'fill-rose-500 text-rose-500' : 'text-zinc-500'
+                                    }`}
+                                  />
+                                  <span
+                                    className={
+                                      heartsInfo.count > 0 ? 'text-rose-300 font-semibold' : 'text-zinc-500'
+                                    }
+                                  >
+                                    {heartsInfo.count}
+                                  </span>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  id={`mobile-heart-btn-${meal.id}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (onToggleHeart) onToggleHeart(meal);
+                                  }}
+                                  className={`inline-flex items-center gap-1 text-xs font-medium py-1 px-2 rounded-full transition-all cursor-pointer border ${
+                                    heartsInfo.hasHearted
+                                      ? 'bg-rose-500/15 border-rose-500/40 text-rose-300 hover:bg-rose-500/25'
+                                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-rose-300 hover:border-rose-500/30'
+                                  }`}
+                                >
+                                  <Heart
+                                    className={`w-3.5 h-3.5 ${
+                                      heartsInfo.hasHearted ? 'fill-rose-500 text-rose-500' : 'text-zinc-400'
+                                    }`}
+                                  />
+                                  {heartsInfo.count > 0 && (
+                                    <span
+                                      className={
+                                        heartsInfo.hasHearted ? 'text-rose-300 font-semibold' : 'text-zinc-400'
+                                      }
+                                    >
+                                      {heartsInfo.count}
+                                    </span>
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
                           <div className="flex items-center justify-between text-[11px] text-zinc-400 mt-2 pt-2 border-t border-zinc-800/60">
                             <span>
-                              Decided by: <strong className="text-zinc-300">{meal.decidedByPersonName}</strong>
+                              Decided by: <strong className="text-zinc-300">{isDecidedByCurrent ? 'You' : meal.decidedByPersonName}</strong>
                             </span>
                             <span className="text-blue-400 font-semibold">View details →</span>
                           </div>

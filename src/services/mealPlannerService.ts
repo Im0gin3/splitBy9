@@ -23,7 +23,7 @@ import {
   User,
 } from 'firebase/auth';
 import { auth, db, getInternalEmail } from '../lib/firebase';
-import { MealEntry, Person, ClaimedProfile, DayOfWeek, MealType, TempLockInfo } from '../types';
+import { MealEntry, Person, ClaimedProfile, DayOfWeek, MealType, TempLockInfo, MealHeart } from '../types';
 import { PREDEFINED_PEOPLE } from '../data/mockData';
 import { getMaxDecisionsForPersonAndWeek } from '../utils/allocationUtils';
 
@@ -32,6 +32,7 @@ const CLAIMED_PROFILES_COLLECTION = 'claimed_profiles';
 const USERS_COLLECTION = 'users';
 const MEAL_SLOTS_COLLECTION = 'meal_slots';
 const USER_WEEKLY_DECISIONS_COLLECTION = 'user_weekly_decisions';
+const MEAL_HEARTS_COLLECTION = 'meal_hearts';
 
 export enum OperationType {
   CREATE = 'create',
@@ -571,7 +572,7 @@ export async function removeConfirmedMealByAtiksh(
   const slotRef = doc(db, MEAL_SLOTS_COLLECTION, slotDocId);
 
   try {
-    return await runTransaction(db, async (transaction) => {
+    const result = await runTransaction(db, async (transaction) => {
       // 1. Read caller profile from Firestore and verify person-8
       const callerUserRef = doc(db, USERS_COLLECTION, currentUid);
       const callerSnap = await transaction.get(callerUserRef);
@@ -633,8 +634,127 @@ export async function removeConfirmedMealByAtiksh(
         returnedToPersonId: originalPersonId,
       };
     });
+
+    // 6. Asynchronously clean up any associated reaction records so no stale hearts linger on a deleted meal
+    try {
+      const heartsQuery = query(
+        collection(db, MEAL_HEARTS_COLLECTION),
+        where('mealId', '==', slotDocId)
+      );
+      const heartsSnap = await getDocs(heartsQuery);
+      if (!heartsSnap.empty) {
+        const batch = writeBatch(db);
+        heartsSnap.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+      }
+      if (meal.id && meal.id !== slotDocId) {
+        const altHeartsQuery = query(
+          collection(db, MEAL_HEARTS_COLLECTION),
+          where('mealId', '==', meal.id)
+        );
+        const altHeartsSnap = await getDocs(altHeartsQuery);
+        if (!altHeartsSnap.empty) {
+          const altBatch = writeBatch(db);
+          altHeartsSnap.forEach((d) => altBatch.delete(d.ref));
+          await altBatch.commit();
+        }
+      }
+    } catch (heartCleanupErr) {
+      console.warn('Could not clean up associated hearts for removed meal:', heartCleanupErr);
+    }
+
+    return result;
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, `${MEAL_SLOTS_COLLECTION}/${slotDocId}`);
+    throw err;
+  }
+}
+
+/**
+ * Subscribes to all meal hearts in real time.
+ */
+export function subscribeToMealHearts(
+  callback: (hearts: MealHeart[]) => void,
+  onError?: (err: unknown) => void
+): () => void {
+  const colRef = collection(db, MEAL_HEARTS_COLLECTION);
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const hearts: MealHeart[] = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          mealId: data.mealId,
+          uid: data.uid,
+          predefinedId: data.predefinedId,
+          userName: data.userName,
+          createdAt: data.createdAt,
+          mealTitle: data.mealTitle,
+          mealType: data.mealType,
+          mealDay: data.mealDay,
+          mealWeekId: data.mealWeekId,
+          decidedByPersonId: data.decidedByPersonId,
+          decidedByPersonName: data.decidedByPersonName,
+        };
+      });
+      callback(hearts);
+    },
+    (err) => {
+      console.warn('Real-time meal hearts subscription error:', err);
+      if (onError) onError(err);
+      handleFirestoreError(err, OperationType.LIST, MEAL_HEARTS_COLLECTION);
+    }
+  );
+}
+
+/**
+ * Toggles heart for a confirmed meal.
+ * - Prevents hearting own meal
+ * - Only allows hearts on confirmed meals
+ * - Persists reaction in Firestore under meal_hearts/{mealId}_{uid}
+ * - Preserves analytics metadata (mealTitle, mealType, mealDay, etc.)
+ */
+export async function toggleMealHeart(
+  meal: MealEntry,
+  currentUser: Person,
+  authUserUid: string
+): Promise<{ action: 'hearted' | 'unhearted' }> {
+  if (!meal.isLocked || meal.status !== 'confirmed') {
+    throw new Error('Only confirmed meals can be hearted.');
+  }
+
+  if (meal.decidedByPersonId === currentUser.id) {
+    throw new Error('You cannot heart your own meal.');
+  }
+
+  const mealId = meal.id;
+  const heartDocId = `${mealId}_${authUserUid}`;
+  const heartRef = doc(db, MEAL_HEARTS_COLLECTION, heartDocId);
+
+  try {
+    const snap = await getDoc(heartRef);
+    if (snap.exists()) {
+      await deleteDoc(heartRef);
+      return { action: 'unhearted' };
+    } else {
+      await setDoc(heartRef, {
+        mealId,
+        uid: authUserUid,
+        predefinedId: currentUser.id,
+        userName: currentUser.name,
+        createdAt: serverTimestamp(),
+        mealTitle: meal.title,
+        mealType: meal.mealType,
+        mealDay: meal.day,
+        mealWeekId: meal.weekId,
+        decidedByPersonId: meal.decidedByPersonId,
+        decidedByPersonName: meal.decidedByPersonName,
+      });
+      return { action: 'hearted' };
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `${MEAL_HEARTS_COLLECTION}/${heartDocId}`);
     throw err;
   }
 }

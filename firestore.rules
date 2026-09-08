@@ -247,5 +247,45 @@ service cloud.firestore {
           )
         );
     }
+
+    // 6. Meal hearts: Individual reactions on confirmed meals
+    match /meal_hearts/{heartId} {
+      allow read: if isAuthenticated();
+
+      // Deleting a heart:
+      // - Users can only delete their own heart.
+      // - Atiksh (admin) can delete any heart as part of removing a meal.
+      allow delete: if isAuthenticated()
+        && (
+          resource.data.uid == request.auth.uid
+          || isAtiksh()
+        );
+
+      // Creating a heart:
+      // - Must be authenticated.
+      // - heartId MUST be exactly `{mealId}_{request.auth.uid}` to prevent ID spoofing and duplicates.
+      // - uid must match auth.uid.
+      // - predefinedId must match user's verified predefinedId.
+      // - Target meal slot MUST exist in /meal_slots/{mealId} and be confirmed/locked.
+      // - User CANNOT heart their own meal (verified against decidedByUid and decidedByPersonId).
+      allow create: if isAuthenticated()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.predefinedId == getUserPersonId()
+        && isPredefinedPersonId(request.resource.data.predefinedId)
+        && request.resource.data.mealId is string
+        && request.resource.data.mealId.size() <= 100
+        && heartId == request.resource.data.mealId + '_' + request.auth.uid
+        && exists(/databases/$(database)/documents/meal_slots/$(request.resource.data.mealId))
+        && get(/databases/$(database)/documents/meal_slots/$(request.resource.data.mealId)).data.isLocked == true
+        && get(/databases/$(database)/documents/meal_slots/$(request.resource.data.mealId)).data.status == 'confirmed'
+        && get(/databases/$(database)/documents/meal_slots/$(request.resource.data.mealId)).data.decidedByPersonId != getUserPersonId()
+        && (
+          !('decidedByUid' in get(/databases/$(database)/documents/meal_slots/$(request.resource.data.mealId)).data)
+          || get(/databases/$(database)/documents/meal_slots/$(request.resource.data.mealId)).data.decidedByUid != request.auth.uid
+        );
+
+      // Hearts cannot be modified once placed (only deleted/unhearted)
+      allow update: if false;
+    }
   }
 }

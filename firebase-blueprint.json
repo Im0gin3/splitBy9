@@ -143,6 +143,58 @@
         }
       },
       "required": ["weekId", "personId", "uid", "maxDecisions", "confirmedSlotIds"]
+    },
+    "MealHeart": {
+      "title": "MealHeart",
+      "description": "An individual heart reaction on a confirmed meal slot by a household member.",
+      "type": "object",
+      "properties": {
+        "mealId": {
+          "type": "string",
+          "description": "Identifier of the confirmed meal slot document."
+        },
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user who gave the heart."
+        },
+        "predefinedId": {
+          "type": "string",
+          "description": "Predefined person ID of the user who gave the heart."
+        },
+        "userName": {
+          "type": "string",
+          "description": "Display name of the user who gave the heart."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the heart was added."
+        },
+        "mealTitle": {
+          "type": "string",
+          "description": "Title of the confirmed meal for future analytics."
+        },
+        "mealType": {
+          "type": "string",
+          "description": "Meal type: breakfast_lunch or dinner."
+        },
+        "mealDay": {
+          "type": "string",
+          "description": "Day of the week."
+        },
+        "mealWeekId": {
+          "type": "string",
+          "description": "ISO week identifier e.g. 2026-W37."
+        },
+        "decidedByPersonId": {
+          "type": "string",
+          "description": "Person ID who originally decided the meal."
+        },
+        "decidedByPersonName": {
+          "type": "string",
+          "description": "Display name of person who decided the meal."
+        }
+      },
+      "required": ["mealId", "uid", "predefinedId", "userName"]
     }
   },
   "firestore": {
@@ -161,6 +213,10 @@
     "/user_weekly_decisions/{decisionId}": {
       "schema": "UserWeeklyDecision",
       "description": "Tracks atomic confirmed slot IDs per user per week to prevent concurrent over-allocation."
+    },
+    "/meal_hearts/{heartId}": {
+      "schema": "MealHeart",
+      "description": "Stores individual hearts/likes given to confirmed meals."
     }
   }
 }

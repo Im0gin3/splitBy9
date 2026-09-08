@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { MealEntry, Person } from '../types';
-import { CheckCircle, X, Tag, User, Calendar, Trash2, Loader2, AlertTriangle } from 'lucide-react';
+import { MealEntry, Person, MealHeart } from '../types';
+import { CheckCircle, X, Tag, User, Calendar, Trash2, Loader2, AlertTriangle, Heart } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { PREDEFINED_PEOPLE } from '../data/mockData';
 
 interface MealDetailModalProps {
   isOpen: boolean;
   meal: MealEntry | null;
   currentUser: Person;
+  hearts?: MealHeart[];
+  onToggleHeart?: (meal: MealEntry) => Promise<void> | void;
   onClose: () => void;
   onRemoveMeal?: (meal: MealEntry) => Promise<void>;
 }
@@ -15,6 +18,8 @@ export const MealDetailModal: React.FC<MealDetailModalProps> = ({
   isOpen,
   meal,
   currentUser,
+  hearts = [],
+  onToggleHeart,
   onClose,
   onRemoveMeal,
 }) => {
@@ -36,6 +41,10 @@ export const MealDetailModal: React.FC<MealDetailModalProps> = ({
   const isOwner = meal.decidedByPersonId === currentUser.id;
   const isAtiksh = currentUser.id === 'person-8';
   const mealTypeLabel = meal.mealType === 'breakfast_lunch' ? 'Breakfast / Lunch' : 'Dinner';
+
+  const mealHearts = hearts || [];
+  const heartCount = mealHearts.length;
+  const hasHearted = mealHearts.some((h) => h.predefinedId === currentUser.id);
 
   const handleExecuteRemove = async () => {
     if (!onRemoveMeal || !meal) return;
@@ -230,6 +239,110 @@ export const MealDetailModal: React.FC<MealDetailModalProps> = ({
                     </div>
                   </div>
                 </div>
+
+                {/* Heart Reactions Section */}
+                {isOwner ? (
+                  /* OWNER VIEW: Sees who hearted it with names and count, no heart button */
+                  <div className="p-3.5 rounded-xl bg-zinc-900/70 border border-zinc-800/80 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-200">
+                        <Heart
+                          className={`w-3.5 h-3.5 ${
+                            heartCount > 0 ? 'fill-rose-500 text-rose-500' : 'text-zinc-500'
+                          }`}
+                        />
+                        <span>Member Reactions</span>
+                      </div>
+                      <span
+                        className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                          heartCount > 0
+                            ? 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+                            : 'bg-zinc-800/60 border-zinc-700/40 text-zinc-400'
+                        }`}
+                      >
+                        {heartCount} {heartCount === 1 ? 'Heart' : 'Hearts'}
+                      </span>
+                    </div>
+
+                    {heartCount === 0 ? (
+                      <p className="text-xs text-zinc-400 leading-relaxed">
+                        No hearts yet. Other household members will see this meal on the schedule and can heart it.
+                      </p>
+                    ) : (
+                      <div>
+                        <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 mb-1.5">
+                          Hearted by:
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {mealHearts.map((h) => {
+                            const person = PREDEFINED_PEOPLE.find((p) => p.id === h.predefinedId);
+                            return (
+                              <span
+                                key={h.id}
+                                className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-zinc-800/90 border border-zinc-700/70 text-zinc-200 shadow-sm"
+                              >
+                                <span
+                                  className="w-2 h-2 rounded-full inline-block flex-shrink-0"
+                                  style={{
+                                    backgroundColor: person?.avatarColor || '#f43f5e',
+                                  }}
+                                />
+                                <span>{h.userName || person?.name || 'Member'}</span>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* NON-OWNER VIEW: Sees count and heart button, but NOT other members' names */
+                  <div className="p-3 rounded-xl bg-zinc-900/70 border border-zinc-800/80 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-lg bg-zinc-800/80 border border-zinc-700/60 text-rose-400 flex items-center justify-center">
+                        <Heart
+                          className={`w-4 h-4 ${
+                            hasHearted ? 'fill-rose-500 text-rose-500' : 'text-zinc-400'
+                          }`}
+                        />
+                      </div>
+                      <div>
+                        <div className="text-xs font-semibold text-zinc-200">
+                          {heartCount === 0
+                            ? 'Be the first to heart this meal'
+                            : `${heartCount} ${
+                                heartCount === 1 ? 'member likes' : 'members like'
+                              } this meal`}
+                        </div>
+                        <div className="text-[10px] text-zinc-400">
+                          {hasHearted
+                            ? 'You have hearted this meal'
+                            : 'Tap heart if you like this menu choice!'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {onToggleHeart && (
+                      <button
+                        type="button"
+                        id="modal-toggle-heart-btn"
+                        onClick={() => onToggleHeart(meal)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border ${
+                          hasHearted
+                            ? 'bg-rose-500/20 border-rose-500/40 text-rose-300 hover:bg-rose-500/30'
+                            : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:text-white hover:border-rose-500/40 hover:bg-zinc-750'
+                        }`}
+                      >
+                        <Heart
+                          className={`w-3.5 h-3.5 ${
+                            hasHearted ? 'fill-rose-500 text-rose-500' : 'text-zinc-400'
+                          }`}
+                        />
+                        <span>{hasHearted ? 'Hearted' : 'Heart'}</span>
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {/* Status explanation */}
                 <div className="p-3 rounded-xl bg-blue-950/20 border border-blue-800/30 text-xs text-blue-300 flex items-center gap-2">

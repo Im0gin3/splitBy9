@@ -69,3 +69,18 @@ export interface AuthUserProfile {
   person: Person;
   email: string;
 }
+
+export interface MealHeart {
+  id: string; // `${mealId}_${uid}`
+  mealId: string;
+  uid: string;
+  predefinedId: string;
+  userName: string;
+  createdAt?: any;
+  mealTitle?: string;
+  mealType?: MealType;
+  mealDay?: DayOfWeek;
+  mealWeekId?: string;
+  decidedByPersonId?: string;
+  decidedByPersonName?: string;
+}

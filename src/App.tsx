@@ -6,13 +6,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from './lib/firebase';
-import { Person, MealEntry, DayInfo, MealType, ClaimedProfile } from './types';
+import { Person, MealEntry, DayInfo, MealType, ClaimedProfile, MealHeart } from './types';
 import { PREDEFINED_PEOPLE } from './data/mockData';
 import { getMondayOfWeek, getWeekId, formatWeekRange, getDaysForWeek } from './utils/dateUtils';
 import { getAllocationsForWeek } from './utils/allocationUtils';
 import {
   subscribeToClaimedProfiles,
   subscribeToWeekMeals,
+  subscribeToMealHearts,
+  toggleMealHeart,
   registerAndClaimPerson,
   loginPerson,
   getPersonForUid,
@@ -47,6 +49,7 @@ export default function App() {
 
   // Real-time Firestore meals for currently active week
   const [meals, setMeals] = useState<MealEntry[]>([]);
+  const [mealHearts, setMealHearts] = useState<MealHeart[]>([]);
   const [isInitialMealsLoading, setIsInitialMealsLoading] = useState<boolean>(true);
 
   // Modal interaction states
@@ -202,6 +205,19 @@ export default function App() {
     };
   }, [activeWeekIds.join(','), authUser, currentUser]);
 
+  // 4. Subscribe to real-time meal hearts across all confirmed meals
+  useEffect(() => {
+    const unsub = subscribeToMealHearts(
+      (hearts) => {
+        setMealHearts(hearts);
+      },
+      (err) => {
+        console.warn('Real-time meal hearts subscription error:', err);
+      }
+    );
+    return () => unsub();
+  }, []);
+
   // Handler: Authenticate via Claim or Login
   const handleAuthenticate = async (
     person: Person,
@@ -346,6 +362,29 @@ export default function App() {
     }
   };
 
+  // Handler: Toggle Heart reaction on a meal
+  const handleToggleHeart = async (meal: MealEntry) => {
+    if (!currentUser || !authUser) {
+      showToast('Sign In Required', 'Please sign in to heart meals.', 'error');
+      return;
+    }
+
+    if (meal.decidedByPersonId === currentUser.id) {
+      showToast('Cannot heart own meal', 'You cannot heart a meal you decided.', 'error');
+      return;
+    }
+
+    try {
+      const res = await toggleMealHeart(meal, currentUser, authUser.uid);
+      if (res.action === 'hearted') {
+        showToast('Meal Liked!', `You hearted "${meal.title}".`);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Could not update reaction.';
+      showToast('Error', msg, 'error');
+    }
+  };
+
   // Loading auth or initial Firestore meal data state
   if (isAuthLoading || isInitialMealsLoading) {
     return (
@@ -395,6 +434,8 @@ export default function App() {
           meals={meals}
           currentUser={currentUser}
           remainingDecisions={currentUserStats.remaining}
+          mealHearts={mealHearts}
+          onToggleHeart={handleToggleHeart}
           onSelectEmptySlot={handleSelectEmptySlot}
           onSelectLockedMeal={(meal) => setDetailModalMeal(meal)}
         />
@@ -455,6 +496,8 @@ export default function App() {
         isOpen={!!detailModalMeal}
         meal={detailModalMeal}
         currentUser={currentUser}
+        hearts={mealHearts.filter((h) => h.mealId === detailModalMeal?.id)}
+        onToggleHeart={handleToggleHeart}
         onClose={() => setDetailModalMeal(null)}
         onRemoveMeal={handleRemoveMeal}
       />
