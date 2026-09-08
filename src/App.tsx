@@ -21,6 +21,7 @@ import {
   acquireTempLock,
   releaseTempLock,
   confirmMealSlot,
+  removeConfirmedMealByAtiksh,
   seedInitialWeekMealsIfEmpty,
   ensureUserWeeklyDecision,
 } from './services/mealPlannerService';
@@ -319,6 +320,28 @@ export default function App() {
     }
   };
 
+  // Handler: Privileged meal removal by Atiksh (person-8)
+  const handleRemoveMeal = async (mealToRemove: MealEntry) => {
+    if (!currentUser || !authUser) return;
+    if (currentUser.id !== 'person-8') {
+      showToast('Permission Denied', 'Only Atiksh can remove confirmed meals.', 'error');
+      return;
+    }
+
+    try {
+      const res = await removeConfirmedMealByAtiksh(mealToRemove, authUser.uid);
+      setDetailModalMeal(null);
+      showToast(
+        'Meal Removed',
+        `"${res.removedMealTitle}" was removed. The slot is now available again and the decision was returned to ${res.returnedToPersonName}.`
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to remove meal.';
+      showToast('Error', msg, 'error');
+      throw err;
+    }
+  };
+
   // Loading auth state
   if (isAuthLoading) {
     return (
@@ -429,6 +452,7 @@ export default function App() {
         meal={detailModalMeal}
         currentUser={currentUser}
         onClose={() => setDetailModalMeal(null)}
+        onRemoveMeal={handleRemoveMeal}
       />
 
       {/* Allocation Limit Reached Modal */}

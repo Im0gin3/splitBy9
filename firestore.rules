@@ -42,6 +42,13 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.predefinedId;
     }
 
+    // Checks if the authenticated user is Atiksh (person-8)
+    function isAtiksh() {
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.predefinedId == 'person-8';
+    }
+
     // Reference to user's decision tracking document
     function getUserDecisionDoc(weekId, personId) {
       return /databases/$(database)/documents/user_weekly_decisions/$(weekId + '_' + personId);
@@ -88,26 +95,51 @@ service cloud.firestore {
       // Only the authenticated user can create their own decision record for their assigned personId.
       // maxDecisions CANNOT be spoofed: it is strictly verified against calculateMaxDecisions.
       allow create: if isAuthenticated()
-        && decisionId == request.resource.data.weekId + '_' + getUserPersonId()
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.personId == getUserPersonId()
-        && request.resource.data.maxDecisions == calculateMaxDecisions(request.resource.data.weekId, getUserPersonId())
-        && request.resource.data.confirmedSlotIds is list
-        && request.resource.data.confirmedSlotIds.size() <= request.resource.data.maxDecisions;
+        && (
+          (
+            decisionId == request.resource.data.weekId + '_' + getUserPersonId()
+            && request.resource.data.uid == request.auth.uid
+            && request.resource.data.personId == getUserPersonId()
+            && request.resource.data.maxDecisions == calculateMaxDecisions(request.resource.data.weekId, getUserPersonId())
+            && request.resource.data.confirmedSlotIds is list
+            && request.resource.data.confirmedSlotIds.size() <= request.resource.data.maxDecisions
+          )
+          ||
+          (
+            isAtiksh()
+            && decisionId == request.resource.data.weekId + '_' + request.resource.data.personId
+            && isPredefinedPersonId(request.resource.data.personId)
+            && request.resource.data.maxDecisions == calculateMaxDecisions(request.resource.data.weekId, request.resource.data.personId)
+            && request.resource.data.confirmedSlotIds is list
+            && request.resource.data.confirmedSlotIds.size() <= request.resource.data.maxDecisions
+          )
+        );
 
       // On update:
-      // - personId cannot be changed
-      // - maxDecisions cannot be increased or altered
-      // - confirmedSlotIds is strictly append-only (cannot remove previously confirmed slots)
-      // - total confirmed slots cannot exceed maxDecisions
+      // - Normal users: strictly append-only up to maxDecisions (cannot remove confirmed slots)
+      // - Atiksh: privileged removal to return decisions (subset of confirmedSlotIds, maxDecisions cannot change)
       allow update: if isAuthenticated()
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.personId == resource.data.personId
-        && request.resource.data.personId == getUserPersonId()
-        && request.resource.data.maxDecisions == resource.data.maxDecisions
-        && request.resource.data.confirmedSlotIds is list
-        && request.resource.data.confirmedSlotIds.size() <= resource.data.maxDecisions
-        && request.resource.data.confirmedSlotIds.hasAll(resource.data.confirmedSlotIds);
+        && (
+          (
+            request.resource.data.uid == request.auth.uid
+            && request.resource.data.personId == resource.data.personId
+            && request.resource.data.personId == getUserPersonId()
+            && request.resource.data.maxDecisions == resource.data.maxDecisions
+            && request.resource.data.confirmedSlotIds is list
+            && request.resource.data.confirmedSlotIds.size() <= resource.data.maxDecisions
+            && request.resource.data.confirmedSlotIds.hasAll(resource.data.confirmedSlotIds)
+          )
+          ||
+          (
+            isAtiksh()
+            && request.resource.data.personId == resource.data.personId
+            && request.resource.data.weekId == resource.data.weekId
+            && request.resource.data.maxDecisions == resource.data.maxDecisions
+            && request.resource.data.confirmedSlotIds is list
+            && request.resource.data.confirmedSlotIds.size() <= resource.data.maxDecisions
+            && resource.data.confirmedSlotIds.hasAll(request.resource.data.confirmedSlotIds)
+          )
+        );
 
       // Records cannot be deleted to reset quota
       allow delete: if false;
@@ -123,12 +155,22 @@ service cloud.firestore {
     match /meal_slots/{slotId} {
       allow read: if true;
 
-      // Deleting a meal slot is ONLY allowed for releasing temporary unconfirmed reservations.
-      // A confirmed meal can NEVER be deleted by a normal user.
+      // Deleting a meal slot:
+      // 1. Normal users can ONLY delete their own temporary unconfirmed reservation.
+      // 2. Privileged removal: ONLY Atiksh (person-8) can delete confirmed/locked meals.
       allow delete: if isAuthenticated()
-        && resource.data.isLocked != true
-        && resource.data.status == 'reserved'
-        && resource.data.tempLock.lockedByUid == request.auth.uid;
+        && (
+          (
+            resource.data.isLocked != true
+            && resource.data.status == 'reserved'
+            && resource.data.tempLock.lockedByUid == request.auth.uid
+          )
+          ||
+          (
+            isAtiksh()
+            && (resource.data.isLocked == true || resource.data.status == 'confirmed')
+          )
+        );
 
       // Creating a new meal slot
       allow create: if isAuthenticated()

@@ -12,6 +12,9 @@ import {
   runTransaction,
   serverTimestamp,
   writeBatch,
+  DocumentReference,
+  DocumentSnapshot,
+  DocumentData,
 } from 'firebase/firestore';
 import {
   createUserWithEmailAndPassword,
@@ -540,6 +543,100 @@ export async function confirmMealSlot(params: {
  */
 export async function unlockMealSlot(_slotId: string, _currentUid: string): Promise<void> {
   throw new Error('Confirmed meals are permanently locked for the group and cannot be deleted.');
+}
+
+/**
+ * Privileged operation for Atiksh (person-8) to remove any confirmed meal.
+ * Atomically:
+ * 1. Verifies caller is authenticated and corresponds to person-8.
+ * 2. Reads the meal slot and confirms it exists and is locked/confirmed.
+ * 3. Removes the slot ID from the original selector's user_weekly_decisions record,
+ *    safely returning the decision count to that specific member without altering their max quota.
+ * 4. Deletes the meal slot document, making the slot completely open and available again.
+ */
+export async function removeConfirmedMealByAtiksh(
+  meal: MealEntry,
+  currentUid: string
+): Promise<{
+  success: boolean;
+  removedMealTitle: string;
+  returnedToPersonName: string;
+  returnedToPersonId: string;
+}> {
+  if (!currentUid) {
+    throw new Error('You must be signed in to remove a meal.');
+  }
+
+  const slotDocId = meal.id || getSlotDocId(meal.weekId, meal.day, meal.mealType);
+  const slotRef = doc(db, MEAL_SLOTS_COLLECTION, slotDocId);
+
+  try {
+    return await runTransaction(db, async (transaction) => {
+      // 1. Read caller profile from Firestore and verify person-8
+      const callerUserRef = doc(db, USERS_COLLECTION, currentUid);
+      const callerSnap = await transaction.get(callerUserRef);
+      if (!callerSnap.exists() || callerSnap.data().predefinedId !== 'person-8') {
+        throw new Error('Unauthorized: Only Atiksh (person-8) has permission to remove confirmed meals.');
+      }
+
+      // 2. Read meal slot from Firestore
+      const slotSnap = await transaction.get(slotRef);
+      if (!slotSnap.exists()) {
+        throw new Error('This meal has already been removed or does not exist.');
+      }
+
+      const slotData = slotSnap.data();
+      if (!slotData.isLocked && slotData.status !== 'confirmed') {
+        throw new Error('Only confirmed meals can be removed.');
+      }
+
+      const originalPersonId = slotData.decidedByPersonId || meal.decidedByPersonId;
+      const originalPersonName =
+        slotData.decidedByPersonName || meal.decidedByPersonName || 'the original decision-maker';
+      const weekId = slotData.weekId || meal.weekId;
+
+      // 3. Read original decision tracking document if it exists
+      let userDecisionRef: DocumentReference<DocumentData> | null = null;
+      let userDecisionSnap: DocumentSnapshot<DocumentData> | null = null;
+
+      if (originalPersonId && weekId) {
+        const decisionDocId = `${weekId}_${originalPersonId}`;
+        userDecisionRef = doc(db, USER_WEEKLY_DECISIONS_COLLECTION, decisionDocId);
+        userDecisionSnap = await transaction.get(userDecisionRef);
+      }
+
+      // --- ALL READS COMPLETE, COMMENCE WRITES ---
+
+      // 4. Update the original selector's weekly decisions document to return the decision
+      if (userDecisionRef && userDecisionSnap && userDecisionSnap.exists()) {
+        const decisionData = (userDecisionSnap.data() || {}) as Record<string, any>;
+        const currentSlots: string[] = Array.isArray(decisionData.confirmedSlotIds)
+          ? decisionData.confirmedSlotIds
+          : [];
+
+        // Filter out both slotDocId and meal.id
+        const filteredSlots = currentSlots.filter((id) => id !== slotDocId && id !== meal.id);
+
+        transaction.update(userDecisionRef, {
+          confirmedSlotIds: filteredSlots,
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      // 5. Delete the meal slot from Firestore to make it immediately available
+      transaction.delete(slotRef);
+
+      return {
+        success: true,
+        removedMealTitle: slotData.title || meal.title,
+        returnedToPersonName: originalPersonName,
+        returnedToPersonId: originalPersonId,
+      };
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `${MEAL_SLOTS_COLLECTION}/${slotDocId}`);
+    throw err;
+  }
 }
 
 /**
