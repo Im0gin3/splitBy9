@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Person, MealEntry, ClaimedProfile } from '../types';
 import { PREDEFINED_PEOPLE } from '../data/mockData';
 import { getAllocationsForWeek } from '../utils/allocationUtils';
+import { getUpcomingMeal } from '../utils/dateUtils';
 import { subscribeToWeekMeals } from '../services/mealPlannerService';
 import { AuthModal } from './AuthModal';
-import { Users, ArrowRight, CheckCircle2, Calendar, Sparkles, Lock, ShieldAlert } from 'lucide-react';
+import { Users, ArrowRight, CheckCircle2, Utensils } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface UserSelectionProps {
@@ -34,12 +35,17 @@ export const UserSelection: React.FC<UserSelectionProps> = ({
     }
   }, [meals]);
 
-  // Real-time listener for current week's meal slots to ensure accurate decision counts
+  // Real-time listener for meal slots to ensure accurate decision counts
   useEffect(() => {
     const unsubscribe = subscribeToWeekMeals(
       currentWeekId,
       (loadedMeals) => {
-        setLiveMeals(loadedMeals);
+        setLiveMeals((prev) => {
+          const map = new Map<string, MealEntry>();
+          prev.forEach((m) => map.set(m.id, m));
+          loadedMeals.forEach((m) => map.set(m.id, m));
+          return Array.from(map.values());
+        });
       },
       (err) => {
         console.warn('Could not subscribe to meals in UserSelection:', err);
@@ -48,13 +54,19 @@ export const UserSelection: React.FC<UserSelectionProps> = ({
     return () => unsubscribe();
   }, [currentWeekId]);
 
+  // Calculate upcoming confirmed meal based on India Standard Time (IST)
+  const effectiveMeals = liveMeals.length > 0 ? liveMeals : meals;
+  const upcomingMeal = useMemo(() => {
+    return getUpcomingMeal(effectiveMeals);
+  }, [effectiveMeals]);
+
   // Get rotation allocations for the currently viewed week
   const allocations = getAllocationsForWeek(mondayDate);
 
   // Calculate each person's stats according to rotation allocation and confirmed meals
   const getPersonStats = (personId: string) => {
     const alloc = allocations[personId] || { maxDecisions: 1, isBonus: false };
-    const userMealsThisWeek = liveMeals.filter(
+    const userMealsThisWeek = effectiveMeals.filter(
       (m) =>
         m.weekId === currentWeekId &&
         m.decidedByPersonId === personId &&
@@ -82,18 +94,31 @@ export const UserSelection: React.FC<UserSelectionProps> = ({
       <div className="absolute bottom-10 right-10 w-[300px] h-[300px] bg-[#0000FD]/5 blur-[100px] rounded-full pointer-events-none" />
 
       {/* Header section */}
-      <header className="max-w-4xl mx-auto w-full text-center relative z-10 pt-4 pb-8">
-
-        <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white mb-3">
+      <header className="max-w-4xl mx-auto w-full text-center relative z-10 pt-2 pb-6 sm:pb-8">
+        <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white mb-2">
           the crib
         </h1>
 
-        {/* Info pills describing the actual 14 slots and rotating allocations */}
-        <div className="mt-5 inline-flex flex-wrap items-center justify-center gap-2 text-xs text-zinc-400 bg-zinc-900/60 border border-zinc-800/60 px-4 py-2 rounded-xl">
-          <div className="flex items-center gap-1.5 text-zinc-300">
-            <Calendar className="w-3.5 h-3.5 text-blue-400" />
-            <span>Current Week: <strong className="text-white">{weekRangeText}</strong></span>
+        {/* Upcoming Meal Indicator */}
+        <div className="mt-4 max-w-sm sm:max-w-md mx-auto w-full rounded-2xl border border-zinc-800/90 bg-zinc-900/70 p-3.5 sm:p-4 text-left shadow-lg backdrop-blur-sm">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1 flex items-center gap-1.5">
+            <Utensils className="w-3 h-3 text-[#0000FD]" />
+            <span>Upcoming Meal</span>
           </div>
+          {upcomingMeal ? (
+            <div>
+              <div className="text-xs text-zinc-400 font-medium">
+                {upcomingMeal.mealTypeLabel} · {upcomingMeal.dateDisplay}
+              </div>
+              <div className="text-base sm:text-lg font-semibold text-white mt-0.5 tracking-tight truncate">
+                {upcomingMeal.title}
+              </div>
+            </div>
+          ) : (
+            <div className="text-xs text-zinc-500 font-medium mt-0.5">
+              No upcoming confirmed meals
+            </div>
+          )}
         </div>
       </header>
 
@@ -137,22 +162,12 @@ export const UserSelection: React.FC<UserSelectionProps> = ({
                     )}
                   </div>
 
-                  {/* Name and status */}
+                  {/* Name */}
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-zinc-100 group-hover:text-white transition-colors text-base">
                         {person.name}
                       </span>
-                      {isClaimed ? (
-                        <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-300 border border-zinc-700 flex items-center gap-0.5">
-                          <Lock className="w-2.5 h-2.5 text-zinc-400" />
-                          Claimed
-                        </span>
-                      ) : (
-                        <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-[#0000FD]/20 text-blue-300 border border-[#0000FD]/30">
-                          Available
-                        </span>
-                      )}
                     </div>
 
                     <div className="text-xs text-zinc-400 flex items-center gap-1.5 mt-0.5">

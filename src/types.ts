@@ -45,6 +45,7 @@ export interface DayInfo {
   displayDate: string; // e.g. "Sep 7"
   displayDayAndDate: string; // e.g. "Mon, Sep 7"
   isToday: boolean;
+  weekId?: string;
 }
 
 export interface UserAllocation {

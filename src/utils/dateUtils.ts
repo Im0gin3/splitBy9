@@ -1,4 +1,4 @@
-import { DayInfo, DayOfWeek } from '../types';
+import { DayInfo, DayOfWeek, MealEntry, MealType } from '../types';
 
 const DAYS_MAP: { key: DayOfWeek; name: string; shortName: string }[] = [
   { key: 'monday', name: 'Monday', shortName: 'Mon' },
@@ -96,6 +96,7 @@ export function getDaysForWeek(mondayDate: Date): DayInfo[] {
   const todayMonth = String(today.getMonth() + 1).padStart(2, '0');
   const todayDay = String(today.getDate()).padStart(2, '0');
   const todayStr = `${todayYear}-${todayMonth}-${todayDay}`;
+  const weekId = getWeekId(mondayDate);
 
   return DAYS_MAP.map((d, index) => {
     const current = new Date(mondayDate);
@@ -117,6 +118,154 @@ export function getDaysForWeek(mondayDate: Date): DayInfo[] {
       displayDate,
       displayDayAndDate,
       isToday,
+      weekId,
     };
   });
+}
+
+/**
+ * Returns 14 days starting from current week's Monday through Sunday of the next week
+ */
+export function getTwoWeeksDays(baseMonday: Date = getMondayOfWeek(0)): DayInfo[] {
+  const currentWeek = getDaysForWeek(baseMonday);
+  const nextMonday = new Date(baseMonday);
+  nextMonday.setDate(baseMonday.getDate() + 7);
+  const nextWeek = getDaysForWeek(nextMonday);
+  return [...currentWeek, ...nextWeek];
+}
+
+export interface UpcomingMealResult {
+  title: string;
+  mealTypeLabel: string;
+  dateDisplay: string;
+  meal: MealEntry;
+}
+
+/**
+ * Returns IST (Asia/Kolkata) date components and minutes from midnight
+ */
+export function getISTDateInfo(now: Date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false,
+  }).formatToParts(now);
+
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || '';
+  const year = parseInt(get('year'), 10);
+  const month = parseInt(get('month'), 10);
+  const day = parseInt(get('day'), 10);
+  let hour = parseInt(get('hour'), 10);
+  if (hour === 24) hour = 0;
+  const minute = parseInt(get('minute'), 10);
+
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const dateStr = `${year}-${pad(month)}-${pad(day)}`;
+  const timeMinutes = hour * 60 + minute;
+
+  return { dateStr, hour, minute, timeMinutes, year, month, day };
+}
+
+/**
+ * Determines the next upcoming confirmed meal based on India Standard Time (IST).
+ * 
+ * Meal periods:
+ * - 1:00 AM through 1:00 PM -> Breakfast/Lunch
+ * - 1:01 PM through 12:59 AM -> Dinner
+ * 
+ * At any given moment, determines the next confirmed meal chronologically.
+ * If the relevant meal period for today has already passed, or there is no confirmed
+ * meal for that period, moves forward to the next confirmed meal.
+ */
+export function getUpcomingMeal(
+  meals: MealEntry[],
+  now: Date = new Date()
+): UpcomingMealResult | null {
+  if (!meals || meals.length === 0) {
+    return null;
+  }
+
+  const ist = getISTDateInfo(now);
+  const candidates: { dateStr: string; mealType: MealType; dateObj: Date }[] = [];
+  const baseDate = new Date(`${ist.dateStr}T12:00:00Z`);
+
+  // 1:00 AM (60 min) through 1:00 PM (780 min) -> Breakfast/Lunch period
+  // 1:01 PM (781 min) through 12:59 AM (59 min) -> Dinner period
+  if (ist.timeMinutes < 60) {
+    // 00:00 to 00:59: within preceding calendar day's dinner window (1:01 PM - 12:59 AM)
+    const yesterday = new Date(baseDate);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yStr = yesterday.toISOString().split('T')[0];
+    candidates.push({ dateStr: yStr, mealType: 'dinner', dateObj: yesterday });
+    candidates.push({ dateStr: ist.dateStr, mealType: 'breakfast_lunch', dateObj: baseDate });
+    candidates.push({ dateStr: ist.dateStr, mealType: 'dinner', dateObj: baseDate });
+  } else if (ist.timeMinutes <= 780) {
+    // 1:00 AM through 1:00 PM: Breakfast/Lunch period active
+    candidates.push({ dateStr: ist.dateStr, mealType: 'breakfast_lunch', dateObj: baseDate });
+    candidates.push({ dateStr: ist.dateStr, mealType: 'dinner', dateObj: baseDate });
+  } else {
+    // 1:01 PM through 11:59 PM: Dinner period active (breakfast_lunch has passed)
+    candidates.push({ dateStr: ist.dateStr, mealType: 'dinner', dateObj: baseDate });
+  }
+
+  // Look ahead up to 28 days for the next confirmed meal
+  for (let i = 1; i <= 28; i++) {
+    const futureDate = new Date(baseDate);
+    futureDate.setDate(futureDate.getDate() + i);
+    const fStr = futureDate.toISOString().split('T')[0];
+    candidates.push({ dateStr: fStr, mealType: 'breakfast_lunch', dateObj: futureDate });
+    candidates.push({ dateStr: fStr, mealType: 'dinner', dateObj: futureDate });
+  }
+
+  // Check each candidate slot in chronological order
+  for (const slot of candidates) {
+    const dayOfWeekIndex = (slot.dateObj.getDay() + 6) % 7;
+    const dayKey = DAYS_MAP[dayOfWeekIndex].key;
+    const weekId = getWeekId(getMondayOfWeek(0, slot.dateObj));
+
+    const matched = meals.find((m) => {
+      const isConfirmed = m.isLocked || m.status === 'confirmed';
+      if (!isConfirmed || !m.title || m.title.trim().length === 0) {
+        return false;
+      }
+      if (m.mealType !== slot.mealType) {
+        return false;
+      }
+      if (m.dateStr) {
+        return m.dateStr === slot.dateStr;
+      }
+      if (m.day === dayKey) {
+        return !m.weekId || m.weekId === weekId;
+      }
+      return false;
+    });
+
+    if (matched) {
+      const weekday = slot.dateObj.toLocaleDateString('en-US', {
+        weekday: 'long',
+        timeZone: 'Asia/Kolkata',
+      });
+      const month = slot.dateObj.toLocaleDateString('en-US', {
+        month: 'short',
+        timeZone: 'Asia/Kolkata',
+      });
+      const dayNum = slot.dateObj.toLocaleDateString('en-US', {
+        day: 'numeric',
+        timeZone: 'Asia/Kolkata',
+      });
+
+      return {
+        title: matched.title,
+        mealTypeLabel: slot.mealType === 'dinner' ? 'Dinner' : 'Breakfast/Lunch',
+        dateDisplay: `${weekday}, ${month} ${dayNum}`,
+        meal: matched,
+      };
+    }
+  }
+
+  return null;
 }

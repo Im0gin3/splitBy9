@@ -1,6 +1,6 @@
 import React from 'react';
 import { MealEntry, Person } from '../types';
-import { Lock, X, Tag, User, Calendar } from 'lucide-react';
+import { CheckCircle, X, Tag, User, Calendar } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface MealDetailModalProps {
@@ -37,11 +37,11 @@ export const MealDetailModal: React.FC<MealDetailModalProps> = ({
           <div className="p-5 border-b border-zinc-800 flex items-start justify-between">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400">
-                <Lock className="w-4 h-4" />
+                <CheckCircle className="w-4 h-4" />
               </div>
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">
-                  Locked Meal
+                  Confirmed Meal
                 </span>
                 <h3 className="text-base font-bold text-white">
                   {mealTypeLabel} Details
@@ -113,8 +113,8 @@ export const MealDetailModal: React.FC<MealDetailModalProps> = ({
 
             {/* Status explanation */}
             <div className="p-3 rounded-xl bg-blue-950/20 border border-blue-800/30 text-xs text-blue-300 flex items-center gap-2">
-              <Lock className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-              <span>This meal is confirmed and locked for the group.</span>
+              <CheckCircle className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+              <span>This meal is confirmed and saved for the group.</span>
             </div>
           </div>
 

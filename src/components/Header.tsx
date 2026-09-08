@@ -30,10 +30,10 @@ export const Header: React.FC<HeaderProps> = ({
   const isLimitReached = remainingDecisions === 0;
 
   return (
-    <header className="border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-30 px-3 sm:px-6 py-3.5 transition-all">
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+    <header className="border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-30 px-3 sm:px-6 py-2.5 sm:py-3.5 transition-all">
+      <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-2.5 md:gap-3">
         {/* Left: Brand logo & Active user */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between w-full md:w-auto">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-[#0000FD] flex items-center justify-center text-white shadow-lg shadow-[#0000FD]/25">
               <Utensils className="w-5 h-5" />
@@ -55,7 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               id="mobile-logout-btn"
               onClick={onLogout}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs font-medium text-zinc-300 hover:text-white"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs font-medium text-zinc-300 hover:text-white cursor-pointer"
               title="Log out"
             >
               <div
@@ -70,8 +70,8 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Center: Week Navigator with Left/Right Arrows */}
-        <div className="flex items-center justify-center gap-1.5 sm:gap-2">
+        {/* Center: Week Navigator with Left/Right Arrows (Desktop only, hidden on mobile) */}
+        <div className="hidden md:flex items-center justify-center gap-1.5 sm:gap-2">
           <button
             id="prev-week-btn"
             onClick={onPrevWeek}
