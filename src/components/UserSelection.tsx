@@ -57,17 +57,10 @@ export const UserSelection: React.FC<UserSelectionProps> = ({
 
       {/* Header section */}
       <header className="max-w-4xl mx-auto w-full text-center relative z-10 pt-4 pb-8">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-900/90 border border-zinc-800/80 text-xs font-semibold tracking-wider uppercase text-blue-400 mb-5">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#0000FD] animate-pulse" />
-          Private Group • 9 Members
-        </div>
 
         <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white mb-3">
-          Meal Planner
+          the crib
         </h1>
-        <p className="text-zinc-400 text-base sm:text-lg max-w-lg mx-auto">
-          Coordinate weekly meals securely. Select your name to sign in or create your password.
-        </p>
 
         {/* Info pills describing the actual 14 slots and rotating allocations */}
         <div className="mt-5 inline-flex flex-wrap items-center justify-center gap-2 text-xs text-zinc-400 bg-zinc-900/60 border border-zinc-800/60 px-4 py-2 rounded-xl">
