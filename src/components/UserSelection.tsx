@@ -126,11 +126,6 @@ export const UserSelection: React.FC<UserSelectionProps> = ({
                       <span className="font-semibold text-zinc-100 group-hover:text-white transition-colors text-base">
                         {person.name}
                       </span>
-                      {stats.isBonus && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-blue-950/70 text-blue-300 border border-blue-800/50">
-                          2 Decisions
-                        </span>
-                      )}
                       {isClaimed ? (
                         <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-300 border border-zinc-700 flex items-center gap-0.5">
                           <Lock className="w-2.5 h-2.5 text-zinc-400" />
