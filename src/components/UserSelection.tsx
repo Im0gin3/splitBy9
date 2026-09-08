@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Person, MealEntry, ClaimedProfile } from '../types';
 import { PREDEFINED_PEOPLE } from '../data/mockData';
 import { getAllocationsForWeek } from '../utils/allocationUtils';
+import { subscribeToWeekMeals } from '../services/mealPlannerService';
 import { AuthModal } from './AuthModal';
 import { Users, ArrowRight, CheckCircle2, Calendar, Sparkles, Lock, ShieldAlert } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -24,15 +25,40 @@ export const UserSelection: React.FC<UserSelectionProps> = ({
   onAuthenticate,
 }) => {
   const [selectedPersonForAuth, setSelectedPersonForAuth] = useState<Person | null>(null);
+  const [liveMeals, setLiveMeals] = useState<MealEntry[]>(meals || []);
+
+  // Sync if parent updates meals
+  useEffect(() => {
+    if (meals && meals.length > 0) {
+      setLiveMeals(meals);
+    }
+  }, [meals]);
+
+  // Real-time listener for current week's meal slots to ensure accurate decision counts
+  useEffect(() => {
+    const unsubscribe = subscribeToWeekMeals(
+      currentWeekId,
+      (loadedMeals) => {
+        setLiveMeals(loadedMeals);
+      },
+      (err) => {
+        console.warn('Could not subscribe to meals in UserSelection:', err);
+      }
+    );
+    return () => unsubscribe();
+  }, [currentWeekId]);
 
   // Get rotation allocations for the currently viewed week
   const allocations = getAllocationsForWeek(mondayDate);
 
-  // Calculate each person's stats according to rotation allocation
+  // Calculate each person's stats according to rotation allocation and confirmed meals
   const getPersonStats = (personId: string) => {
     const alloc = allocations[personId] || { maxDecisions: 1, isBonus: false };
-    const userMealsThisWeek = meals.filter(
-      (m) => m.weekId === currentWeekId && m.decidedByPersonId === personId && m.isLocked
+    const userMealsThisWeek = liveMeals.filter(
+      (m) =>
+        m.weekId === currentWeekId &&
+        m.decidedByPersonId === personId &&
+        (m.isLocked || m.status === 'confirmed')
     );
     const count = userMealsThisWeek.length;
     const remaining = Math.max(0, alloc.maxDecisions - count);

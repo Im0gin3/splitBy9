@@ -83,7 +83,7 @@ service cloud.firestore {
 
     // 3. User weekly decisions: Atomic tracking of confirmed slot IDs per person per week
     match /user_weekly_decisions/{decisionId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
 
       // Only the authenticated user can create their own decision record for their assigned personId.
       // maxDecisions CANNOT be spoofed: it is strictly verified against calculateMaxDecisions.
@@ -121,7 +121,7 @@ service cloud.firestore {
 
     // 5. Meal slots (14 slots per week)
     match /meal_slots/{slotId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
 
       // Deleting a meal slot is ONLY allowed for releasing temporary unconfirmed reservations.
       // A confirmed meal can NEVER be deleted by a normal user.

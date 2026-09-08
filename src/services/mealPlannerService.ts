@@ -210,12 +210,6 @@ export function subscribeToWeekMeals(
   callback: (meals: MealEntry[]) => void,
   onError?: (err: unknown) => void
 ) {
-  // Only attach listener if user is authenticated
-  if (!auth.currentUser) {
-    callback([]);
-    return () => {};
-  }
-
   const q = query(
     collection(db, MEAL_SLOTS_COLLECTION),
     where('weekId', '==', weekId)

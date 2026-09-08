@@ -134,23 +134,20 @@ export default function App() {
 
   // 3. Subscribe to real-time meal slots for the active week & seed if empty (authenticated only)
   useEffect(() => {
-    if (!authUser) {
-      setMeals([]);
-      return;
-    }
+    // Seed sample meals if this is the first time the week is accessed (only if authenticated)
+    if (authUser) {
+      seedInitialWeekMealsIfEmpty(currentWeekId);
 
-    // Seed sample meals if this is the first time the week is accessed
-    seedInitialWeekMealsIfEmpty(currentWeekId);
-
-    // Guarantee the user's weekly decision document exists in Firestore
-    if (currentUser) {
-      ensureUserWeeklyDecision(currentWeekId, {
-        uid: authUser.uid,
-        personId: currentUser.id,
-        name: currentUser.name,
-      }).catch((err) => {
-        console.warn('Could not ensure weekly decision document:', err);
-      });
+      // Guarantee the user's weekly decision document exists in Firestore
+      if (currentUser) {
+        ensureUserWeeklyDecision(currentWeekId, {
+          uid: authUser.uid,
+          personId: currentUser.id,
+          name: currentUser.name,
+        }).catch((err) => {
+          console.warn('Could not ensure weekly decision document:', err);
+        });
+      }
     }
 
     const unsubscribeMeals = subscribeToWeekMeals(
